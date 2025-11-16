@@ -416,8 +416,9 @@ DATASETS = {
 # UTILITY FUNCTIONS
 # ============================================================================
 
+@st.cache_data(ttl=3600)
 def load_data(path: Path) -> Optional[pd.DataFrame]:
-    """Load CSV data with error handling"""
+    """Load CSV data with error handling and caching"""
     if not path.exists():
         return None
     try:
@@ -426,8 +427,9 @@ def load_data(path: Path) -> Optional[pd.DataFrame]:
         st.error(f"Error loading {path}: {str(e)}")
         return None
 
+@st.cache_data(ttl=3600)
 def load_config(path: Path) -> Optional[Dict]:
-    """Load JSON config with error handling"""
+    """Load JSON config with error handling and caching"""
     if not path.exists():
         return None
     try:
@@ -478,6 +480,160 @@ def init_session_state():
         st.session_state.kmeans_params = {
             'n_clusters': 3
         }
+
+# ============================================================================
+# ADVANCED VISUALIZATIONS
+# ============================================================================
+
+def create_lof_score_scatter(df: pd.DataFrame, dataset_name: str) -> go.Figure:
+    """Create scatter plot of LOF scores"""
+    if 'lof_score' not in df.columns:
+        return None
+
+    # Add index for x-axis
+    df_plot = df.copy()
+    df_plot['index'] = range(len(df_plot))
+
+    fig = go.Figure()
+
+    # Separate anomalies and normal data
+    if 'is_anomaly' in df.columns:
+        anomalies = df_plot[df_plot['is_anomaly'] == -1]
+        normal = df_plot[df_plot['is_anomaly'] == 1]
+
+        # Plot normal data
+        fig.add_trace(go.Scatter(
+            x=normal['index'],
+            y=normal['lof_score'],
+            mode='markers',
+            name='Normal',
+            marker=dict(color='#10B981', size=4, opacity=0.6)
+        ))
+
+        # Plot anomalies
+        fig.add_trace(go.Scatter(
+            x=anomalies['index'],
+            y=anomalies['lof_score'],
+            mode='markers',
+            name='Anomaly',
+            marker=dict(color='#EF4444', size=6, opacity=0.8)
+        ))
+    else:
+        fig.add_trace(go.Scatter(
+            x=df_plot['index'],
+            y=df_plot['lof_score'],
+            mode='markers',
+            name='LOF Score',
+            marker=dict(color='#3B82F6', size=4, opacity=0.6)
+        ))
+
+    fig.update_layout(
+        title=f"LOF Score Distribution - {dataset_name}",
+        xaxis_title="Data Point Index",
+        yaxis_title="LOF Score",
+        hovermode='closest',
+        showlegend=True
+    )
+
+    return fig
+
+def create_cluster_scatter_2d(df: pd.DataFrame, dataset_name: str) -> go.Figure:
+    """Create 2D scatter plot of clusters using first two features"""
+    if 'cluster' not in df.columns:
+        return None
+
+    # Get numeric columns (excluding cluster and lof_score)
+    numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+    exclude_cols = ['cluster', 'lof_score', 'is_anomaly']
+    feature_cols = [col for col in numeric_cols if col not in exclude_cols]
+
+    if len(feature_cols) < 2:
+        return None
+
+    # Use first two features for visualization
+    x_col = feature_cols[0]
+    y_col = feature_cols[1]
+
+    fig = px.scatter(
+        df,
+        x=x_col,
+        y=y_col,
+        color='cluster',
+        title=f"Cluster Visualization (2D) - {dataset_name}",
+        labels={'cluster': 'Cluster'},
+        color_continuous_scale='viridis'
+    )
+
+    fig.update_traces(marker=dict(size=8, opacity=0.7))
+
+    return fig
+
+def create_temporal_heatmap(df: pd.DataFrame, dataset_name: str) -> go.Figure:
+    """Create heatmap of anomalies by hour and day of week"""
+    if 'timestamp' not in df.columns:
+        return None
+
+    try:
+        df_temp = df.copy()
+        df_temp['timestamp'] = pd.to_datetime(df_temp['timestamp'], errors='coerce')
+        df_temp = df_temp.dropna(subset=['timestamp'])
+
+        df_temp['hour'] = df_temp['timestamp'].dt.hour
+        df_temp['day_of_week'] = df_temp['timestamp'].dt.dayofweek
+
+        # Create pivot table
+        heatmap_data = df_temp.groupby(['day_of_week', 'hour']).size().unstack(fill_value=0)
+
+        # Day names
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+        fig = go.Figure(data=go.Heatmap(
+            z=heatmap_data.values,
+            x=list(range(24)),
+            y=[day_names[i] for i in heatmap_data.index],
+            colorscale='Blues',
+            text=heatmap_data.values,
+            texttemplate='%{text}',
+            textfont={"size": 10},
+            colorbar=dict(title="Count")
+        ))
+
+        fig.update_layout(
+            title=f"Anomaly Distribution by Time - {dataset_name}",
+            xaxis_title="Hour of Day",
+            yaxis_title="Day of Week",
+            height=400
+        )
+
+        return fig
+    except Exception as e:
+        st.warning(f"Could not create temporal heatmap: {str(e)}")
+        return None
+
+def create_comparison_metrics(dataset1_name: str, dataset2_name: str) -> pd.DataFrame:
+    """Create comparison table between two datasets"""
+    datasets_data = []
+
+    for ds_key in [dataset1_name, dataset2_name]:
+        dataset_info = DATASETS[ds_key]
+
+        # Load configs
+        lof_config = load_config(dataset_info["lof_config"])
+        kmeans_config = load_config(dataset_info["kmeans_config"])
+        df_clustered = load_data(dataset_info["clustered_path"])
+
+        if df_clustered is not None and lof_config and kmeans_config:
+            datasets_data.append({
+                'Dataset': DATASETS[ds_key]['label'],
+                'Total Anomalies': len(df_clustered),
+                'Clusters': df_clustered['cluster'].nunique() if 'cluster' in df_clustered.columns else 'N/A',
+                'LOF K': lof_config.get('optimal_k', 'N/A'),
+                'Anomaly Rate (%)': round(lof_config.get('final_anomaly_percentage', 0), 2),
+                'Silhouette Score': round(kmeans_config.get('silhouette_score', 0), 3),
+                'Davies-Bouldin': round(kmeans_config.get('davies_bouldin_index', 0), 3),
+            })
+
+    return pd.DataFrame(datasets_data)
 
 # ============================================================================
 # STAGE IMPLEMENTATIONS
@@ -898,16 +1054,26 @@ def render_stage_05():
     st.markdown("#### 📈 LOF Score Distribution")
 
     if 'lof_score' in df_anomalies.columns:
-        fig = px.histogram(
-            df_anomalies,
-            x='lof_score',
-            nbins=50,
-            title="Distribution of LOF Scores",
-            color_discrete_sequence=['#3B82F6'],
-            labels={'lof_score': 'LOF Score', 'count': 'Frequency'}
-        )
-        fig.update_layout(showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Histogram
+            fig_hist = px.histogram(
+                df_anomalies,
+                x='lof_score',
+                nbins=50,
+                title="Distribution of LOF Scores (Histogram)",
+                color_discrete_sequence=['#3B82F6'],
+                labels={'lof_score': 'LOF Score', 'count': 'Frequency'}
+            )
+            fig_hist.update_layout(showlegend=False)
+            st.plotly_chart(fig_hist, use_container_width=True)
+
+        with col2:
+            # Scatter plot
+            fig_scatter = create_lof_score_scatter(df_anomalies, DATASETS[dataset_key]['label'])
+            if fig_scatter:
+                st.plotly_chart(fig_scatter, use_container_width=True)
 
         # LOF Score statistics
         col1, col2, col3, col4 = st.columns(4)
@@ -989,21 +1155,38 @@ def render_stage_06():
         render_metric_card("Davies-Bouldin", f"{db_index:.3f}", color)
 
     # Cluster distribution
-    st.markdown("#### 📊 Cluster Distribution")
+    st.markdown("#### 📊 Cluster Distribution & Visualization")
 
     if 'cluster' in df_clustered.columns:
         cluster_counts = df_clustered['cluster'].value_counts().sort_index()
 
-        # Bar chart
-        fig = px.bar(
-            x=cluster_counts.index,
-            y=cluster_counts.values,
-            labels={'x': 'Cluster', 'y': 'Count'},
-            title='Anomalies per Cluster',
-            color=cluster_counts.values,
-            color_continuous_scale='blues'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Bar chart
+            fig_bar = px.bar(
+                x=cluster_counts.index,
+                y=cluster_counts.values,
+                labels={'x': 'Cluster', 'y': 'Count'},
+                title='Anomalies per Cluster',
+                color=cluster_counts.values,
+                color_continuous_scale='blues'
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+        with col2:
+            # 2D scatter plot of clusters
+            fig_scatter = create_cluster_scatter_2d(df_clustered, DATASETS[dataset_key]['label'])
+            if fig_scatter:
+                st.plotly_chart(fig_scatter, use_container_width=True)
+            else:
+                st.info("2D cluster visualization requires at least 2 features")
+
+        # Temporal heatmap
+        st.markdown("#### 🕐 Temporal Analysis")
+        fig_heatmap = create_temporal_heatmap(df_clustered, DATASETS[dataset_key]['label'])
+        if fig_heatmap:
+            st.plotly_chart(fig_heatmap, use_container_width=True)
 
         # Cluster summary table
         st.markdown("#### 📋 Cluster Summary")
@@ -1093,6 +1276,46 @@ def render_stage_07():
         return
 
     render_alert("Pipeline berhasil diselesaikan! Berikut adalah ringkasan hasil analisis.", "success")
+
+    # Dataset comparison option
+    st.markdown("#### 📊 Dataset Comparison")
+    show_comparison = st.checkbox("Show comparison with other dataset", value=False)
+
+    if show_comparison:
+        other_dataset = 'staff' if dataset_key == 'tracker' else 'tracker'
+        comparison_df = create_comparison_metrics(dataset_key, other_dataset)
+
+        if not comparison_df.empty:
+            st.dataframe(comparison_df, use_container_width=True)
+
+            # Side-by-side visualization
+            st.markdown("#### 📈 Side-by-Side Comparison")
+
+            col1, col2 = st.columns(2)
+
+            for idx, ds_key in enumerate([dataset_key, other_dataset]):
+                ds_info = DATASETS[ds_key]
+                df_comp = load_data(ds_info["clustered_path"])
+
+                if df_comp is not None and 'cluster' in df_comp.columns:
+                    cluster_counts = df_comp['cluster'].value_counts().sort_index()
+
+                    fig = px.bar(
+                        x=cluster_counts.index,
+                        y=cluster_counts.values,
+                        labels={'x': 'Cluster', 'y': 'Count'},
+                        title=ds_info['label'],
+                        color_discrete_sequence=['#3B82F6' if idx == 0 else '#10B981']
+                    )
+
+                    if idx == 0:
+                        col1.plotly_chart(fig, use_container_width=True)
+                    else:
+                        col2.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("Comparison data not available. Ensure both datasets have been processed.")
+
+    st.markdown("---")
 
     # Overall summary
     st.markdown("#### 🎯 Overall Summary")
@@ -1248,6 +1471,29 @@ def main():
     st.sidebar.markdown("### 🎯 Progress")
     st.sidebar.markdown(f"**Current Stage:** {st.session_state.current_stage}/7")
     st.sidebar.markdown(f"**Completed:** {len(st.session_state.completed_stages)}/7")
+
+    # Quick stats in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 📈 Quick Stats")
+
+    try:
+        dataset_key = st.session_state.selected_dataset
+        ds_info = DATASETS[dataset_key]
+
+        # Load final results
+        df_final = load_data(ds_info["clustered_path"])
+        lof_conf = load_config(ds_info["lof_config"])
+        kmeans_conf = load_config(ds_info["kmeans_config"])
+
+        if df_final is not None and lof_conf and kmeans_conf:
+            st.sidebar.metric("Total Anomalies", format_number(len(df_final)))
+            st.sidebar.metric("Clusters", df_final['cluster'].nunique() if 'cluster' in df_final.columns else 'N/A')
+            st.sidebar.metric("Anomaly Rate", f"{lof_conf.get('final_anomaly_percentage', 0):.2f}%")
+            st.sidebar.metric("Silhouette", f"{kmeans_conf.get('silhouette_score', 0):.3f}")
+        else:
+            st.sidebar.info("Run pipeline to see stats")
+    except Exception as e:
+        st.sidebar.info("Stats will appear after running pipeline")
 
     # Stage navigation in sidebar
     st.sidebar.markdown("---")
