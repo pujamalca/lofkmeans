@@ -1882,13 +1882,22 @@ def render_stage_06():
 
         st.dataframe(cluster_summary, use_container_width=True)
 
-        # Cluster characteristics
-        st.markdown("#### 🔍 Cluster Characteristics")
+        # Cluster characteristics with interpretations
+        st.markdown("#### 🔍 Cluster Characteristics & Interpretations")
+
+        # Check if cluster interpretations available
+        cluster_interpretations = kmeans_config.get('cluster_interpretations', {})
 
         for cluster_id in sorted(df_clustered['cluster'].unique()):
             cluster_data = df_clustered[df_clustered['cluster'] == cluster_id]
+            cluster_info = cluster_interpretations.get(str(cluster_id), {})
+            cluster_label = cluster_info.get('label', f'Cluster {cluster_id}')
 
-            with st.expander(f"Cluster {cluster_id} ({len(cluster_data)} anomalies)"):
+            with st.expander(f"Cluster {cluster_id}: {cluster_label} ({len(cluster_data)} anomalies)"):
+                # Show interpretation if available
+                if cluster_info:
+                    render_alert(f"📌 {cluster_label}", "info")
+
                 col1, col2 = st.columns(2)
 
                 with col1:
@@ -1896,7 +1905,7 @@ def render_stage_06():
                     render_metric_card("Unique Users", str(cluster_data['user_id'].nunique()), "green")
 
                 with col2:
-                    render_metric_card("Avg LOF Score", f"{cluster_data['lof_score'].mean():.2f}", "purple")
+                    render_metric_card("Avg LOF Score", f"{cluster_data['lof_score'].mean():.2e}", "purple")
 
                     # Peak hour
                     if 'timestamp' in cluster_data.columns:
@@ -1953,6 +1962,311 @@ def render_stage_07():
         return
 
     render_alert("Pipeline berhasil diselesaikan! Berikut adalah ringkasan hasil analisis.", "success")
+
+    # ========================================================================
+    # SUMMARY REPORT GENERATION
+    # ========================================================================
+    st.markdown("#### 📄 Summary Report")
+
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        st.markdown("""
+        Generate a comprehensive HTML and Markdown report containing:
+        - Executive summary with key metrics
+        - Detailed cluster analysis and interpretations
+        - Top anomalies and affected users
+        - Security recommendations
+        """)
+
+    with col2:
+        if st.button("🔄 Generate Report", type="primary", use_container_width=True):
+            with st.spinner("Generating summary report..."):
+                import subprocess
+                result = subprocess.run(
+                    ['python', '07_generate_summary_report.py'],
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8'
+                )
+
+                if result.returncode == 0:
+                    st.success("✓ Report generated successfully!")
+                    st.rerun()
+                else:
+                    st.error(f"Error generating report: {result.stderr}")
+
+    # Check for existing reports
+    import glob
+    report_files = glob.glob('reports/anomaly_detection_report_*.html')
+
+    if report_files:
+        report_files.sort(reverse=True)  # Most recent first
+        latest_report = report_files[0]
+
+        st.markdown(f"**Latest Report:** `{os.path.basename(latest_report)}`")
+
+        # Report viewing and download options
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            # Read HTML report for download
+            with open(latest_report, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+
+            st.download_button(
+                label="📥 Download HTML Report",
+                data=html_content,
+                file_name=os.path.basename(latest_report),
+                mime="text/html",
+                use_container_width=True
+            )
+
+        with col2:
+            # Check for corresponding markdown report
+            md_report = latest_report.replace('.html', '.md')
+            if os.path.exists(md_report):
+                with open(md_report, 'r', encoding='utf-8') as f:
+                    md_content = f.read()
+
+                st.download_button(
+                    label="📥 Download Markdown Report",
+                    data=md_content,
+                    file_name=os.path.basename(md_report),
+                    mime="text/markdown",
+                    use_container_width=True
+                )
+
+        with col3:
+            if st.button("👁 View Report", use_container_width=True):
+                st.session_state.show_report = True
+
+        # Display report inline if requested
+        if st.session_state.get('show_report', False):
+            st.markdown("---")
+            st.markdown("### 📊 Report Preview")
+
+            # Create tabs for HTML and Markdown view
+            tab1, tab2 = st.tabs(["HTML Preview", "Markdown Preview"])
+
+            with tab1:
+                st.components.v1.html(html_content, height=800, scrolling=True)
+
+            with tab2:
+                if os.path.exists(md_report):
+                    with open(md_report, 'r', encoding='utf-8') as f:
+                        md_content = f.read()
+                    st.markdown(md_content, unsafe_allow_html=True)
+
+            if st.button("✖ Close Report"):
+                st.session_state.show_report = False
+                st.rerun()
+
+    st.markdown("---")
+
+    # ========================================================================
+    # CLUSTER INTERPRETATIONS
+    # ========================================================================
+    st.markdown("#### 🏷️ Cluster Interpretations")
+
+    if kmeans_config and 'cluster_interpretations' in kmeans_config:
+        cluster_interpretations = kmeans_config['cluster_interpretations']
+
+        # Create visual cluster cards
+        num_clusters = len(cluster_interpretations)
+        cols_per_row = 2
+        rows = (num_clusters + cols_per_row - 1) // cols_per_row
+
+        for row in range(rows):
+            cols = st.columns(cols_per_row)
+
+            for col_idx in range(cols_per_row):
+                cluster_idx = row * cols_per_row + col_idx
+
+                if cluster_idx >= num_clusters:
+                    break
+
+                cluster_id = str(cluster_idx)
+
+                if cluster_id in cluster_interpretations:
+                    cluster_info = cluster_interpretations[cluster_id]
+
+                    with cols[col_idx]:
+                        # Determine color based on anomaly strength
+                        avg_lof = cluster_info.get('avg_lof_score', 0)
+                        all_lof_scores = [cluster_interpretations[str(i)].get('avg_lof_score', 0) for i in range(num_clusters)]
+                        median_lof = np.median(all_lof_scores)
+
+                        if avg_lof > median_lof * 1.5:
+                            border_color = "EF4444"
+                            text_color = "DC2626"
+                            risk_level = "🔴 High Risk"
+                        elif avg_lof > median_lof:
+                            border_color = "F59E0B"
+                            text_color = "D97706"
+                            risk_level = "🟠 Medium Risk"
+                        else:
+                            border_color = "3B82F6"
+                            text_color = "2563EB"
+                            risk_level = "🔵 Low Risk"
+
+                        cluster_label = cluster_info.get('label', f'Cluster {cluster_id}')
+
+                        st.markdown(f"""
+                        <div style="
+                            border: 2px solid #{border_color};
+                            border-radius: 10px;
+                            padding: 15px;
+                            margin-bottom: 15px;
+                            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                        ">
+                            <h4 style="margin: 0 0 10px 0; color: #{text_color};">
+                                Cluster {cluster_id}: {cluster_label}
+                            </h4>
+                            <p style="margin: 5px 0; font-size: 0.9em;">
+                                <strong>Risk Level:</strong> {risk_level}
+                            </p>
+                            <p style="margin: 5px 0; font-size: 0.9em;">
+                                <strong>Anomalies:</strong> {cluster_info.get('count', 0)} ({cluster_info.get('percentage', 0):.1f}%)
+                            </p>
+                            <p style="margin: 5px 0; font-size: 0.9em;">
+                                <strong>Avg Hour:</strong> {cluster_info.get('avg_hour', 0):.1f}
+                            </p>
+                            <p style="margin: 5px 0; font-size: 0.9em;">
+                                <strong>Weekend Activity:</strong> {cluster_info.get('weekend_pct', 0):.1f}%
+                            </p>
+                            <p style="margin: 5px 0; font-size: 0.9em;">
+                                <strong>Outside Work Hours:</strong> {cluster_info.get('outside_hours_pct', 0):.1f}%
+                            </p>
+                            <p style="margin: 5px 0; font-size: 0.9em;">
+                                <strong>Avg LOF Score:</strong> {cluster_info.get('avg_lof_score', 0):.2e}
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        # Top users
+                        top_users = cluster_info.get('top_users', {})
+                        if top_users:
+                            st.markdown("**Top Users:**")
+                            for user_id, count in list(top_users.items())[:3]:
+                                st.markdown(f"- User {user_id}: {count} anomalies")
+
+    else:
+        render_alert("Cluster interpretations not available. Run K-Means clustering first.", "warning")
+
+    st.markdown("---")
+
+    # ========================================================================
+    # RECOMMENDATIONS
+    # ========================================================================
+    st.markdown("#### 💡 Security Recommendations")
+
+    # Analyze data to generate recommendations
+    anomalies_df = df_clustered[df_clustered['is_anomaly'] == 1] if 'is_anomaly' in df_clustered.columns else df_clustered
+
+    # Calculate key metrics for recommendations
+    weekend_anomalies = anomalies_df['IsWeekend'].sum() if 'IsWeekend' in anomalies_df.columns else 0
+    outside_hours_anomalies = anomalies_df['IsOutsideWorkHours'].sum() if 'IsOutsideWorkHours' in anomalies_df.columns else 0
+    weekend_pct = (weekend_anomalies / len(anomalies_df) * 100) if len(anomalies_df) > 0 else 0
+    outside_hours_pct = (outside_hours_anomalies / len(anomalies_df) * 100) if len(anomalies_df) > 0 else 0
+
+    # Top users with anomalies
+    top_anomaly_users = anomalies_df['user_id'].value_counts().head(10) if 'user_id' in anomalies_df.columns else pd.Series()
+
+    # Generate recommendations
+    recommendations = {
+        "high": [],
+        "medium": [],
+        "low": []
+    }
+
+    # High priority recommendations
+    if weekend_pct > 20:
+        recommendations["high"].append({
+            "title": "Review Weekend Access Policies",
+            "description": f"{weekend_pct:.1f}% of anomalies occur during weekends. Consider implementing stricter authentication for weekend access.",
+            "metric": f"{weekend_anomalies} weekend anomalies"
+        })
+
+    if outside_hours_pct > 30:
+        recommendations["high"].append({
+            "title": "Monitor After-Hours Activity",
+            "description": f"{outside_hours_pct:.1f}% of anomalies occur outside work hours (08:00-18:30). Set up alerts for suspicious after-hours access.",
+            "metric": f"{outside_hours_anomalies} outside-hours anomalies"
+        })
+
+    if len(top_anomaly_users) > 0 and top_anomaly_users.iloc[0] > 30:
+        recommendations["high"].append({
+            "title": "Investigate High-Risk Users",
+            "description": f"User {top_anomaly_users.index[0]} has {top_anomaly_users.iloc[0]} anomalies. Immediate investigation recommended.",
+            "metric": f"{top_anomaly_users.iloc[0]} anomalies from single user"
+        })
+
+    # Medium priority recommendations
+    if kmeans_config and kmeans_config.get('optimal_k', 0) > 8:
+        recommendations["medium"].append({
+            "title": "Diverse Anomaly Patterns Detected",
+            "description": f"{kmeans_config.get('optimal_k')} distinct anomaly clusters identified. Review each cluster for specific security concerns.",
+            "metric": f"{kmeans_config.get('optimal_k')} clusters"
+        })
+
+    recommendations["medium"].append({
+        "title": "Implement User Behavior Analytics",
+        "description": "Deploy continuous monitoring to detect anomalies in real-time based on the patterns identified.",
+        "metric": "Proactive security measure"
+    })
+
+    # Low priority recommendations
+    recommendations["low"].append({
+        "title": "Regular Model Retraining",
+        "description": "Retrain LOF and K-Means models quarterly with updated data to maintain detection accuracy.",
+        "metric": "Model maintenance"
+    })
+
+    recommendations["low"].append({
+        "title": "Security Awareness Training",
+        "description": "Conduct targeted training for users with frequent anomalous behavior patterns.",
+        "metric": f"{len(top_anomaly_users)} users identified"
+    })
+
+    # Display recommendations by priority
+    color_map = {
+        "red": {"border": "EF4444", "text": "DC2626"},
+        "orange": {"border": "F59E0B", "text": "D97706"},
+        "blue": {"border": "3B82F6", "text": "2563EB"}
+    }
+
+    for priority, color, icon in [("high", "red", "🔴"), ("medium", "orange", "🟠"), ("low", "blue", "🔵")]:
+        if recommendations[priority]:
+            st.markdown(f"**{icon} {priority.upper()} Priority**")
+
+            border_color = color_map[color]["border"]
+            text_color = color_map[color]["text"]
+
+            for rec in recommendations[priority]:
+                st.markdown(f"""
+                <div style="
+                    border-left: 4px solid #{border_color};
+                    padding: 12px 15px;
+                    margin: 10px 0;
+                    background-color: #f8f9fa;
+                    border-radius: 4px;
+                ">
+                    <h5 style="margin: 0 0 8px 0; color: #{text_color};">
+                        {rec['title']}
+                    </h5>
+                    <p style="margin: 5px 0; font-size: 0.9em; color: #374151;">
+                        {rec['description']}
+                    </p>
+                    <p style="margin: 5px 0; font-size: 0.85em; color: #6B7280;">
+                        <strong>Key Metric:</strong> {rec['metric']}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+    st.markdown("---")
 
     # Dataset comparison option
     st.markdown("#### 📊 Dataset Comparison")
@@ -2028,6 +2342,91 @@ def render_stage_07():
         if kmeans_config:
             silhouette = kmeans_config.get('silhouette_score', 0)
             render_metric_card("Silhouette Score", f"{silhouette:.3f}", "green")
+
+    # ========================================================================
+    # TOP ANOMALIES
+    # ========================================================================
+    st.markdown("#### 🚨 Top 20 Critical Anomalies")
+
+    anomalies_df = df_clustered[df_clustered['is_anomaly'] == 1] if 'is_anomaly' in df_clustered.columns else df_clustered
+
+    if 'lof_score' in anomalies_df.columns and len(anomalies_df) > 0:
+        top_anomalies = anomalies_df.nlargest(20, 'lof_score')
+
+        # Create display columns
+        display_cols = []
+        col_names = []
+
+        if 'user_id' in top_anomalies.columns:
+            display_cols.append('user_id')
+            col_names.append('User ID')
+
+        if 'timestamp' in top_anomalies.columns:
+            display_cols.append('timestamp')
+            col_names.append('Timestamp')
+
+        if 'cluster' in top_anomalies.columns:
+            display_cols.append('cluster')
+            col_names.append('Cluster')
+
+        if 'lof_score' in top_anomalies.columns:
+            display_cols.append('lof_score')
+            col_names.append('LOF Score')
+
+        if 'dataset_source' in top_anomalies.columns:
+            display_cols.append('dataset_source')
+            col_names.append('Source')
+
+        # Additional useful columns
+        for col in ['hour', 'IsWeekend', 'IsOutsideWorkHours', 'frekuensi_aktivitas_per_user']:
+            if col in top_anomalies.columns:
+                display_cols.append(col)
+                col_names.append(col.replace('_', ' ').title())
+
+        # Create display dataframe
+        top_display = top_anomalies[display_cols].copy()
+        top_display.columns = col_names
+
+        # Format LOF Score
+        if 'LOF Score' in top_display.columns:
+            top_display['LOF Score'] = top_display['LOF Score'].apply(lambda x: f"{x:.2e}")
+
+        # Add risk indicator
+        if kmeans_config and 'cluster_interpretations' in kmeans_config:
+            cluster_interps = kmeans_config['cluster_interpretations']
+            if 'Cluster' in top_display.columns:
+                top_display['Risk'] = top_display['Cluster'].apply(
+                    lambda c: cluster_interps.get(str(c), {}).get('label', f'Cluster {c}') if c >= 0 else 'N/A'
+                )
+
+        st.dataframe(
+            top_display,
+            use_container_width=True,
+            height=400
+        )
+
+        # Summary stats for top anomalies
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if 'User ID' in top_display.columns:
+                unique_users = top_display['User ID'].nunique()
+                st.metric("Unique Users", unique_users)
+
+        with col2:
+            if 'Cluster' in top_display.columns:
+                unique_clusters = top_display['Cluster'].nunique()
+                st.metric("Clusters Represented", unique_clusters)
+
+        with col3:
+            if 'Source' in top_display.columns:
+                sources = top_display['Source'].value_counts()
+                st.metric("Primary Source", sources.index[0] if len(sources) > 0 else "N/A")
+
+    else:
+        render_alert("No anomaly data available to display.", "warning")
+
+    st.markdown("---")
 
     # Complete dataset view
     st.markdown("#### 📋 Complete Anomaly Dataset")
