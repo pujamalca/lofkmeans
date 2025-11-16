@@ -501,7 +501,7 @@ def connect_to_database(db_type: str, config: Dict) -> Optional[pd.DataFrame]:
     Connect to database and execute query
 
     Args:
-        db_type: 'mysql', 'postgresql', or 'sqlite'
+        db_type: 'mysql', 'mariadb', 'postgresql', or 'sqlite'
         config: Database connection configuration
 
     Returns:
@@ -515,8 +515,8 @@ def connect_to_database(db_type: str, config: Dict) -> Optional[pd.DataFrame]:
             conn.close()
             return df
 
-        elif db_type == 'mysql' and MYSQL_AVAILABLE:
-            # MySQL connection
+        elif db_type in ['mysql', 'mariadb'] and MYSQL_AVAILABLE:
+            # MySQL/MariaDB connection
             conn = mysql.connector.connect(
                 host=config['host'],
                 port=config.get('port', 3306),
@@ -536,8 +536,8 @@ def connect_to_database(db_type: str, config: Dict) -> Optional[pd.DataFrame]:
             engine.dispose()
             return df
 
-        elif db_type == 'mysql' and SQLALCHEMY_AVAILABLE:
-            # MySQL via SQLAlchemy (fallback)
+        elif db_type in ['mysql', 'mariadb'] and SQLALCHEMY_AVAILABLE:
+            # MySQL/MariaDB via SQLAlchemy (fallback)
             connection_string = f"mysql+pymysql://{config['user']}:{config['password']}@{config['host']}:{config.get('port', 3306)}/{config['database']}"
             engine = create_engine(connection_string)
             df = pd.read_sql_query(config['query'], engine)
@@ -741,38 +741,45 @@ def merge_datasets(df_tracker: pd.DataFrame, df_staff: pd.DataFrame) -> pd.DataF
     Returns:
         Merged DataFrame with dataset_source column
     """
-    # Add source identifier
+    # Make copies
     df_tracker_copy = df_tracker.copy()
     df_staff_copy = df_staff.copy()
 
-    df_tracker_copy['dataset_source'] = 'tracker'
-    df_staff_copy['dataset_source'] = 'staff'
+    # FIX: Combine date + time for staff dataset if 'date' column exists
+    if 'date' in df_staff_copy.columns and 'timestamp' in df_staff_copy.columns:
+        # Combine date and time columns into full datetime
+        df_staff_copy['timestamp'] = df_staff_copy['date'].astype(str) + ' ' + df_staff_copy['timestamp'].astype(str)
+        # Drop the date column after merging
+        df_staff_copy = df_staff_copy.drop(columns=['date'])
 
-    # Normalize column names to common schema
-    # Find common columns
+    # Find common columns BEFORE adding dataset_source
     tracker_cols = set(df_tracker_copy.columns)
     staff_cols = set(df_staff_copy.columns)
     common_cols = tracker_cols.intersection(staff_cols)
 
-    # Merge on common columns only
-    if 'timestamp' in common_cols and 'user_id' in common_cols:
-        # Keep only common columns plus dataset_source
-        keep_cols = list(common_cols) + ['dataset_source']
-
-        df_tracker_filtered = df_tracker_copy[keep_cols]
-        df_staff_filtered = df_staff_copy[keep_cols]
-
-        # Concatenate
-        df_merged = pd.concat([df_tracker_filtered, df_staff_filtered], ignore_index=True)
-
-        # Save to merged file
-        output_path = Path("data/raw/merged_raw.csv")
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        df_merged.to_csv(output_path, index=False)
-
-        return df_merged
-    else:
+    # Check required columns
+    if 'timestamp' not in common_cols or 'user_id' not in common_cols:
         raise ValueError("Both datasets must have 'timestamp' and 'user_id' columns for merging")
+
+    # Keep only common columns
+    keep_cols = list(common_cols)
+
+    df_tracker_filtered = df_tracker_copy[keep_cols].copy()
+    df_staff_filtered = df_staff_copy[keep_cols].copy()
+
+    # Add source identifier AFTER filtering
+    df_tracker_filtered['dataset_source'] = 'tracker'
+    df_staff_filtered['dataset_source'] = 'staff'
+
+    # Concatenate
+    df_merged = pd.concat([df_tracker_filtered, df_staff_filtered], ignore_index=True)
+
+    # Save to merged file
+    output_path = Path("data/raw/merged_raw.csv")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df_merged.to_csv(output_path, index=False)
+
+    return df_merged
 
 # ============================================================================
 # SESSION STATE INITIALIZATION
@@ -1148,13 +1155,13 @@ def render_stage_01():
                 # Database configuration
                 db_type = st.selectbox(
                     "Database Type",
-                    options=['mysql', 'postgresql', 'sqlite'],
+                    options=['mysql', 'mariadb', 'postgresql', 'sqlite'],
                     key=f"db_type_{dataset_key}"
                 )
 
                 if db_type != 'sqlite':
                     db_host = st.text_input("Host", value="localhost", key=f"db_host_{dataset_key}")
-                    db_port = st.number_input("Port", value=3306 if db_type == 'mysql' else 5432, key=f"db_port_{dataset_key}")
+                    db_port = st.number_input("Port", value=3306 if db_type in ['mysql', 'mariadb'] else 5432, key=f"db_port_{dataset_key}")
                     db_user = st.text_input("Username", key=f"db_user_{dataset_key}")
                     db_password = st.text_input("Password", type="password", key=f"db_password_{dataset_key}")
                     db_name = st.text_input("Database Name", key=f"db_name_{dataset_key}")
@@ -1202,13 +1209,13 @@ def render_stage_01():
             with col1:
                 db_type = st.selectbox(
                     "Database Type",
-                    options=['mysql', 'postgresql', 'sqlite'],
+                    options=['mysql', 'mariadb', 'postgresql', 'sqlite'],
                     key=f"db_direct_type_{dataset_key}"
                 )
 
                 if db_type != 'sqlite':
                     db_host = st.text_input("Host", value="localhost", key=f"db_direct_host_{dataset_key}")
-                    db_port = st.number_input("Port", value=3306 if db_type == 'mysql' else 5432, key=f"db_direct_port_{dataset_key}")
+                    db_port = st.number_input("Port", value=3306 if db_type in ['mysql', 'mariadb'] else 5432, key=f"db_direct_port_{dataset_key}")
                     db_user = st.text_input("Username", key=f"db_direct_user_{dataset_key}")
                     db_password = st.text_input("Password", type="password", key=f"db_direct_password_{dataset_key}")
                     db_name = st.text_input("Database Name", key=f"db_direct_name_{dataset_key}")

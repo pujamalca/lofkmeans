@@ -1,0 +1,80 @@
+{
+  "optimal_k": 25,
+  "contamination": 0.05,
+  "n_features": 14,
+  "feature_names": [
+    "hour",
+    "day_of_week",
+    "month",
+    "day_of_month",
+    "IsOutsideWorkHours",
+    "IsWeekend",
+    "NightShift",
+    "source_tracker",
+    "source_staff",
+    "frekuensi_aktivitas_per_user",
+    "frekuensi_per_user_per_source",
+    "pola_waktu_akses",
+    "rasio_weekend_per_user",
+    "rasio_outside_hours_per_user"
+  ],
+  "model_type": "LocalOutlierFactor",
+  "grid_search_results": [
+    {
+      "k": 5,
+      "anomalies_detected": 134,
+      "anomaly_percentage": 5.033809166040571,
+      "lof_score_min": -4495898387.020275,
+      "lof_score_max": -0.9032634544464571,
+      "lof_score_mean": -86660382.1257077
+    },
+    {
+      "k": 10,
+      "anomalies_detected": 127,
+      "anomaly_percentage": 4.770848985725019,
+      "lof_score_min": -5175647247.76159,
+      "lof_score_max": -0.9690770116863922,
+      "lof_score_mean": -152284585.88026705
+    },
+    {
+      "k": 15,
+      "anomalies_detected": 134,
+      "anomaly_percentage": 5.033809166040571,
+      "lof_score_min": -12282100669.697641,
+      "lof_score_max": -0.9405447809898949,
+      "lof_score_mean": -227356813.8505478
+    },
+    {
+      "k": 20,
+      "anomalies_detected": 124,
+      "anomaly_percentage": 4.658151765589782,
+      "lof_score_min": -11241288452.11204,
+      "lof_score_max": -0.9424812585998785,
+      "lof_score_mean": -196205963.6642693
+    },
+    {
+      "k": 25,
+      "anomalies_detected": 133,
+      "anomaly_percentage": 4.996243425995492,
+      "lof_score_min": -5739191797.725137,
+      "lof_score_max": -0.9563947178962333,
+      "lof_score_mean": -225312208.399059
+    },
+    {
+      "k": 30,
+      "anomalies_detected": 109,
+      "anomaly_percentage": 4.094665664913599,
+      "lof_score_min": -5335066947.013744,
+      "lof_score_max": -0.9704215525278993,
+      "lof_score_mean": -154765642.45796493
+    }
+  ],
+  "final_anomalies_count": 133,
+  "final_anomaly_percentage": 4.996243425995492,
+  "source_distribution": {
+    "tracker": {
+      "total": 2662,
+      "anomalies": 133
+    }
+  }
+}
