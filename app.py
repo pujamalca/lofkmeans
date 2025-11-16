@@ -348,13 +348,16 @@ def render_progress_stepper(current_stage: int, completed_stages: List[int]):
             state = "pending"
             icon = str(stage_num)
 
-        html += f'''
-        <div class="step">
-            <div class="step-circle {state}">{icon}</div>
-            <div class="step-label">{stage["label"]}</div>
-            {f'<div class="step-line {state}"></div>' if i < len(stages) - 1 else ''}
-        </div>
-        '''
+        # Add step
+        html += f'<div class="step">'
+        html += f'<div class="step-circle {state}">{icon}</div>'
+        html += f'<div class="step-label">{stage["label"]}</div>'
+
+        # Add step line if not last item
+        if i < len(stages) - 1:
+            html += f'<div class="step-line {state}"></div>'
+
+        html += '</div>'
 
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
@@ -1905,11 +1908,14 @@ def main():
     # Render header
     render_header()
 
-    # Render progress stepper
+    # Render progress stepper in a container
+    st.markdown('<div style="margin: 2rem 0;">', unsafe_allow_html=True)
     render_progress_stepper(
         current_stage=st.session_state.current_stage,
         completed_stages=st.session_state.completed_stages
     )
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('---')
 
     # Display current dataset info in sidebar
     st.sidebar.markdown("### 📊 Current Dataset")
