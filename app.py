@@ -430,6 +430,19 @@ DATASETS = {
         "kmeans_config": Path("models/kmeans_config_staff.json"),
         "feature_info": Path("models/feature_info_staff.json"),
         "description": "Data login staff dengan informasi waktu akses dan pola login"
+    },
+    "merged": {
+        "label": "🔗 Merged - Tracker + Staff",
+        "raw_path": Path("data/raw/merged_raw.csv"),
+        "cleaned_path": Path("data/cleaned/merged_cleaned.csv"),
+        "transformed_path": Path("data/transformed/merged_transformed.csv"),
+        "normalized_path": Path("data/normalized/merged_normalized.csv"),
+        "anomalies_path": Path("data/anomalies/merged_with_lof_scores.csv"),
+        "clustered_path": Path("data/anomalies/merged_anomalies_clustered.csv"),
+        "lof_config": Path("models/lof_config_merged.json"),
+        "kmeans_config": Path("models/kmeans_config_merged.json"),
+        "feature_info": Path("models/feature_info_merged.json"),
+        "description": "Dataset gabungan Tracker + Staff dengan dataset_source identifier"
     }
 }
 
@@ -773,6 +786,15 @@ def init_session_state():
     if 'selected_dataset' not in st.session_state:
         st.session_state.selected_dataset = "tracker"
 
+    if 'merge_mode' not in st.session_state:
+        st.session_state.merge_mode = False
+
+    if 'df_tracker_loaded' not in st.session_state:
+        st.session_state.df_tracker_loaded = None
+
+    if 'df_staff_loaded' not in st.session_state:
+        st.session_state.df_staff_loaded = None
+
     if 'lof_params' not in st.session_state:
         st.session_state.lof_params = {
             'n_neighbors': 5,
@@ -943,284 +965,448 @@ def create_comparison_metrics(dataset1_name: str, dataset2_name: str) -> pd.Data
 # ============================================================================
 
 def render_stage_01():
-    """Stage 01: Load & Explore Both Datasets (Tracker + Staff)"""
+    """Stage 01: Load & Explore Data with Merge Mode Support"""
     st.markdown('<div class="stage-card">', unsafe_allow_html=True)
-    st.markdown("### 📁 Stage 01: Load & Explore Data (Tracker + Staff)")
+    st.markdown("### 📁 Stage 01: Load & Explore Data")
 
-    render_alert("Di stage ini, load KEDUA dataset (Tracker DAN Staff). Keduanya akan digabung di Stage 02.", "info")
+    # Merge mode toggle
+    st.markdown("#### 🔗 Processing Mode")
 
-    st.markdown("---")
-
-    st.markdown("---")
-
-    # Data source selection
-    st.markdown("#### 📊 Data Source")
-
-    data_source = st.radio(
-        "Pilih sumber data:",
-        options=["Load from file", "Upload CSV", "Upload SQL", "Connect to Database"],
-        horizontal=True,
-        key=f"data_source_{dataset_key}"
+    merge_mode = st.checkbox(
+        "🔗 **Merge Mode** - Gabungkan Tracker + Staff datasets (recommended)",
+        value=st.session_state.get('merge_mode', False),
+        key="merge_mode_toggle",
+        help="Jika diaktifkan, kedua dataset akan digabung di Stage 02 untuk analisis terpadu"
     )
 
-    df_raw = None
+    # Update session state
+    st.session_state.merge_mode = merge_mode
 
-    # Handle different data sources
-    if data_source == "Load from file":
-        # Original: Load from existing file
-        raw_path = dataset_info["raw_path"]
-        file_info = get_file_info(raw_path)
+    if merge_mode:
+        # Update selected_dataset to merged
+        st.session_state.selected_dataset = "merged"
+        render_alert("📌 Mode Merge aktif: Kedua dataset (Tracker + Staff) akan dimuat dan digabung di Stage 02.", "info")
+    else:
+        render_alert("📌 Mode Separate: Pilih satu dataset untuk dianalisis.", "info")
 
-        if not file_info["exists"]:
-            render_alert(f"File {raw_path} tidak ditemukan. Silakan upload data atau gunakan sumber lain.", "warning")
+    st.markdown("---")
+
+    # If merge mode, load both datasets
+    if merge_mode:
+        st.markdown("#### 📊 Load Both Datasets (Tracker + Staff)")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**📊 Tracker Dataset**")
+            tracker_info = DATASETS["tracker"]
+            tracker_path = tracker_info["raw_path"]
+            df_tracker = load_data(tracker_path)
+
+            if df_tracker is not None:
+                st.success(f"✅ Loaded {len(df_tracker)} rows")
+                st.session_state.df_tracker_loaded = df_tracker
+                with st.expander("Preview Tracker"):
+                    st.dataframe(df_tracker.head(5), use_container_width=True)
+            else:
+                st.warning(f"⚠️ File not found: {tracker_path}")
+                st.info("💡 Upload data or use separate mode")
+
+        with col2:
+            st.markdown("**👥 Staff Dataset**")
+            staff_info = DATASETS["staff"]
+            staff_path = staff_info["raw_path"]
+            df_staff = load_data(staff_path)
+
+            if df_staff is not None:
+                st.success(f"✅ Loaded {len(df_staff)} rows")
+                st.session_state.df_staff_loaded = df_staff
+                with st.expander("Preview Staff"):
+                    st.dataframe(df_staff.head(5), use_container_width=True)
+            else:
+                st.warning(f"⚠️ File not found: {staff_path}")
+                st.info("💡 Upload data or use separate mode")
+
+        # Check if both datasets loaded
+        if df_tracker is not None and df_staff is not None:
+            st.markdown("---")
+            render_alert("✅ Kedua dataset berhasil dimuat! Lanjut ke Stage 02 untuk merge.", "success")
+
+            # Show combined stats
+            st.markdown("#### 📊 Combined Statistics")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                render_metric_card("Total Tracker", format_number(len(df_tracker)), "blue")
+            with col2:
+                render_metric_card("Total Staff", format_number(len(df_staff)), "green")
+            with col3:
+                render_metric_card("Combined Total", format_number(len(df_tracker) + len(df_staff)), "purple")
+            with col4:
+                render_metric_card("Datasets", "2", "yellow")
+
+        # Navigation
+        st.markdown("<br>", unsafe_allow_html=True)
+        if df_tracker is not None and df_staff is not None:
+            if st.button("▶ Lanjut ke Stage 02: Merge & Preprocessing", type="primary"):
+                st.session_state.current_stage = 2
+                if 1 not in st.session_state.completed_stages:
+                    st.session_state.completed_stages.append(1)
+                st.rerun()
+        else:
+            render_alert("⚠️ Pastikan KEDUA dataset sudah dimuat sebelum melanjutkan.", "warning")
+
+    else:
+        # Original single dataset mode
+        st.markdown("#### 📊 Dataset Selection")
+
+        dataset_key = st.radio(
+            "Pilih dataset:",
+            options=["tracker", "staff"],
+            format_func=lambda x: DATASETS[x]["label"],
+            horizontal=True,
+            key="dataset_selector"
+        )
+
+        st.session_state.selected_dataset = dataset_key
+        dataset_info = DATASETS[dataset_key]
+
+        st.markdown("---")
+
+        # Data source selection
+        st.markdown("#### 📊 Data Source")
+
+        data_source = st.radio(
+            "Pilih sumber data:",
+            options=["Load from file", "Upload CSV", "Upload SQL", "Connect to Database"],
+            horizontal=True,
+            key=f"data_source_{dataset_key}"
+        )
+
+        df_raw = None
+
+        # Handle different data sources (simplified for separate mode)
+        if data_source == "Load from file":
+            # Load from existing file
+            raw_path = dataset_info["raw_path"]
+            file_info = get_file_info(raw_path)
+
+            if not file_info["exists"]:
+                render_alert(f"File {raw_path} tidak ditemukan. Silakan upload data atau gunakan sumber lain.", "warning")
+                st.markdown('</div>', unsafe_allow_html=True)
+                return
+
+            df_raw = load_data(raw_path)
+
+            if df_raw is not None:
+                st.success(f"✅ Loaded from {raw_path}")
+
+        elif data_source == "Upload CSV":
+            # Upload CSV file
+            st.markdown("**Upload CSV File**")
+            uploaded_file = st.file_uploader(
+                "Choose a CSV file (comma, semicolon, or tab separated)",
+                type=['csv', 'txt'],
+                key=f"csv_upload_{dataset_key}"
+            )
+
+            if uploaded_file is not None:
+                with st.spinner("Uploading and processing CSV..."):
+                    df_raw = upload_csv_data(uploaded_file, dataset_key)
+
+                if df_raw is not None:
+                    # Validate data
+                    validation = validate_uploaded_data(df_raw, dataset_key)
+
+                    if validation['errors']:
+                        for error in validation['errors']:
+                            render_alert(f"❌ {error}", "danger")
+
+                    if validation['warnings']:
+                        for warning in validation['warnings']:
+                            render_alert(f"⚠️ {warning}", "warning")
+
+                    if validation['valid']:
+                        render_alert("✅ Data validation passed!", "success")
+
+        elif data_source == "Upload SQL":
+            # Upload SQL file
+            st.markdown("**Upload SQL File & Connect to Database**")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                uploaded_sql = st.file_uploader(
+                    "Choose a SQL file (.sql)",
+                    type=['sql'],
+                    key=f"sql_upload_{dataset_key}"
+                )
+
+            with col2:
+                # Database configuration
+                db_type = st.selectbox(
+                    "Database Type",
+                    options=['mysql', 'postgresql', 'sqlite'],
+                    key=f"db_type_{dataset_key}"
+                )
+
+                if db_type != 'sqlite':
+                    db_host = st.text_input("Host", value="localhost", key=f"db_host_{dataset_key}")
+                    db_port = st.number_input("Port", value=3306 if db_type == 'mysql' else 5432, key=f"db_port_{dataset_key}")
+                    db_user = st.text_input("Username", key=f"db_user_{dataset_key}")
+                    db_password = st.text_input("Password", type="password", key=f"db_password_{dataset_key}")
+                    db_name = st.text_input("Database Name", key=f"db_name_{dataset_key}")
+                else:
+                    db_name = st.text_input("SQLite Database Path", value="database.db", key=f"db_name_{dataset_key}")
+
+            if uploaded_sql is not None and st.button("Execute SQL", key=f"exec_sql_{dataset_key}"):
+                db_config = {
+                    'type': db_type,
+                    'database': db_name
+                }
+
+                if db_type != 'sqlite':
+                    db_config.update({
+                        'host': db_host,
+                        'port': db_port,
+                        'user': db_user,
+                        'password': db_password
+                    })
+
+                with st.spinner("Executing SQL query..."):
+                    df_raw = upload_sql_file(uploaded_sql, dataset_key, db_config)
+
+                if df_raw is not None:
+                    # Validate data
+                    validation = validate_uploaded_data(df_raw, dataset_key)
+
+                    if validation['errors']:
+                        for error in validation['errors']:
+                            render_alert(f"❌ {error}", "danger")
+
+                    if validation['warnings']:
+                        for warning in validation['warnings']:
+                            render_alert(f"⚠️ {warning}", "warning")
+
+                    if validation['valid']:
+                        render_alert("✅ Data validation passed!", "success")
+
+        elif data_source == "Connect to Database":
+            # Direct database connection
+            st.markdown("**Direct Database Connection**")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                db_type = st.selectbox(
+                    "Database Type",
+                    options=['mysql', 'postgresql', 'sqlite'],
+                    key=f"db_direct_type_{dataset_key}"
+                )
+
+                if db_type != 'sqlite':
+                    db_host = st.text_input("Host", value="localhost", key=f"db_direct_host_{dataset_key}")
+                    db_port = st.number_input("Port", value=3306 if db_type == 'mysql' else 5432, key=f"db_direct_port_{dataset_key}")
+                    db_user = st.text_input("Username", key=f"db_direct_user_{dataset_key}")
+                    db_password = st.text_input("Password", type="password", key=f"db_direct_password_{dataset_key}")
+                    db_name = st.text_input("Database Name", key=f"db_direct_name_{dataset_key}")
+                else:
+                    db_name = st.text_input("SQLite Database Path", value="database.db", key=f"db_direct_name_{dataset_key}")
+
+            with col2:
+                query = st.text_area(
+                    "SQL Query",
+                    value="SELECT * FROM table_name LIMIT 1000",
+                    height=200,
+                    key=f"db_query_{dataset_key}"
+                )
+
+            if st.button("Connect & Query", key=f"connect_db_{dataset_key}"):
+                db_config = {
+                    'type': db_type,
+                    'database': db_name,
+                    'query': query
+                }
+
+                if db_type != 'sqlite':
+                    db_config.update({
+                        'host': db_host,
+                        'port': db_port,
+                        'user': db_user,
+                        'password': db_password
+                    })
+
+                with st.spinner("Connecting to database..."):
+                    df_raw = connect_to_database(db_type, db_config)
+
+                if df_raw is not None:
+                    # Save to file
+                    output_path = Path(f"data/raw/{dataset_key}_raw.csv")
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    df_raw.to_csv(output_path, index=False)
+                    st.success(f"✅ Data retrieved successfully! Saved to {output_path}")
+
+                    # Validate data
+                    validation = validate_uploaded_data(df_raw, dataset_key)
+
+                    if validation['errors']:
+                        for error in validation['errors']:
+                            render_alert(f"❌ {error}", "danger")
+
+                    if validation['warnings']:
+                        for warning in validation['warnings']:
+                            render_alert(f"⚠️ {warning}", "warning")
+
+                    if validation['valid']:
+                        render_alert("✅ Data validation passed!", "success")
+
+        # If no data loaded, stop here
+        if df_raw is None:
             st.markdown('</div>', unsafe_allow_html=True)
             return
 
-        df_raw = load_data(raw_path)
+        st.markdown("---")
 
-        if df_raw is not None:
-            st.success(f"✅ Loaded from {raw_path}")
+        # Continue with original data display
+        df_raw = load_data(dataset_info["raw_path"])  # Reload to ensure cached
 
-    elif data_source == "Upload CSV":
-        # Upload CSV file
-        st.markdown("**Upload CSV File**")
-        uploaded_file = st.file_uploader(
-            "Choose a CSV file (comma, semicolon, or tab separated)",
-            type=['csv', 'txt'],
-            key=f"csv_upload_{dataset_key}"
-        )
+        if df_raw is None:
+            render_alert("Gagal memuat data", "danger")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
 
-        if uploaded_file is not None:
-            with st.spinner("Uploading and processing CSV..."):
-                df_raw = upload_csv_data(uploaded_file, dataset_key)
+        # Display metrics
+        st.markdown("#### 📊 Informasi Dataset")
 
-            if df_raw is not None:
-                # Validate data
-                validation = validate_uploaded_data(df_raw, dataset_key)
-
-                if validation['errors']:
-                    for error in validation['errors']:
-                        render_alert(f"❌ {error}", "danger")
-
-                if validation['warnings']:
-                    for warning in validation['warnings']:
-                        render_alert(f"⚠️ {warning}", "warning")
-
-                if validation['valid']:
-                    render_alert("✅ Data validation passed!", "success")
-
-    elif data_source == "Upload SQL":
-        # Upload SQL file
-        st.markdown("**Upload SQL File & Connect to Database**")
-
-        col1, col2 = st.columns(2)
+        col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            uploaded_sql = st.file_uploader(
-                "Choose a SQL file (.sql)",
-                type=['sql'],
-                key=f"sql_upload_{dataset_key}"
-            )
+            render_metric_card("Total Rows", format_number(len(df_raw)), "blue")
 
         with col2:
-            # Database configuration
-            db_type = st.selectbox(
-                "Database Type",
-                options=['mysql', 'postgresql', 'sqlite'],
-                key=f"db_type_{dataset_key}"
-            )
+            render_metric_card("Columns", str(df_raw.shape[1]), "green")
 
-            if db_type != 'sqlite':
-                db_host = st.text_input("Host", value="localhost", key=f"db_host_{dataset_key}")
-                db_port = st.number_input("Port", value=3306 if db_type == 'mysql' else 5432, key=f"db_port_{dataset_key}")
-                db_user = st.text_input("Username", key=f"db_user_{dataset_key}")
-                db_password = st.text_input("Password", type="password", key=f"db_password_{dataset_key}")
-                db_name = st.text_input("Database Name", key=f"db_name_{dataset_key}")
-            else:
-                db_name = st.text_input("SQLite Database Path", value="database.db", key=f"db_name_{dataset_key}")
+        with col3:
+            render_metric_card("File Size", f"{file_info['size_mb']} MB", "purple")
 
-        if uploaded_sql is not None and st.button("Execute SQL", key=f"exec_sql_{dataset_key}"):
-            db_config = {
-                'type': db_type,
-                'database': db_name
-            }
+        with col4:
+            render_metric_card("Missing Values", str(df_raw.isnull().sum().sum()), "yellow")
 
-            if db_type != 'sqlite':
-                db_config.update({
-                    'host': db_host,
-                    'port': db_port,
-                    'user': db_user,
-                    'password': db_password
-                })
+        # Data preview
+        st.markdown("#### 🔍 Preview Data (10 baris pertama)")
+        st.dataframe(df_raw.head(10), use_container_width=True)
 
-            with st.spinner("Executing SQL query..."):
-                df_raw = upload_sql_file(uploaded_sql, dataset_key, db_config)
+        # Basic statistics
+        with st.expander("📈 Statistik Deskriptif"):
+            st.dataframe(df_raw.describe(), use_container_width=True)
 
-            if df_raw is not None:
-                # Validate data
-                validation = validate_uploaded_data(df_raw, dataset_key)
+        # Column info
+        with st.expander("📋 Informasi Kolom"):
+            col_info = pd.DataFrame({
+                'Column': df_raw.columns,
+                'Type': df_raw.dtypes.values,
+                'Non-Null': df_raw.count().values,
+                'Null': df_raw.isnull().sum().values
+            })
+            st.dataframe(col_info, use_container_width=True)
 
-                if validation['errors']:
-                    for error in validation['errors']:
-                        render_alert(f"❌ {error}", "danger")
-
-                if validation['warnings']:
-                    for warning in validation['warnings']:
-                        render_alert(f"⚠️ {warning}", "warning")
-
-                if validation['valid']:
-                    render_alert("✅ Data validation passed!", "success")
-
-    elif data_source == "Connect to Database":
-        # Direct database connection
-        st.markdown("**Direct Database Connection**")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            db_type = st.selectbox(
-                "Database Type",
-                options=['mysql', 'postgresql', 'sqlite'],
-                key=f"db_direct_type_{dataset_key}"
-            )
-
-            if db_type != 'sqlite':
-                db_host = st.text_input("Host", value="localhost", key=f"db_direct_host_{dataset_key}")
-                db_port = st.number_input("Port", value=3306 if db_type == 'mysql' else 5432, key=f"db_direct_port_{dataset_key}")
-                db_user = st.text_input("Username", key=f"db_direct_user_{dataset_key}")
-                db_password = st.text_input("Password", type="password", key=f"db_direct_password_{dataset_key}")
-                db_name = st.text_input("Database Name", key=f"db_direct_name_{dataset_key}")
-            else:
-                db_name = st.text_input("SQLite Database Path", value="database.db", key=f"db_direct_name_{dataset_key}")
-
-        with col2:
-            query = st.text_area(
-                "SQL Query",
-                value="SELECT * FROM table_name LIMIT 1000",
-                height=200,
-                key=f"db_query_{dataset_key}"
-            )
-
-        if st.button("Connect & Query", key=f"connect_db_{dataset_key}"):
-            db_config = {
-                'type': db_type,
-                'database': db_name,
-                'query': query
-            }
-
-            if db_type != 'sqlite':
-                db_config.update({
-                    'host': db_host,
-                    'port': db_port,
-                    'user': db_user,
-                    'password': db_password
-                })
-
-            with st.spinner("Connecting to database..."):
-                df_raw = connect_to_database(db_type, db_config)
-
-            if df_raw is not None:
-                # Save to file
-                output_path = Path(f"data/raw/{dataset_key}_raw.csv")
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                df_raw.to_csv(output_path, index=False)
-                st.success(f"✅ Data retrieved successfully! Saved to {output_path}")
-
-                # Validate data
-                validation = validate_uploaded_data(df_raw, dataset_key)
-
-                if validation['errors']:
-                    for error in validation['errors']:
-                        render_alert(f"❌ {error}", "danger")
-
-                if validation['warnings']:
-                    for warning in validation['warnings']:
-                        render_alert(f"⚠️ {warning}", "warning")
-
-                if validation['valid']:
-                    render_alert("✅ Data validation passed!", "success")
-
-    # If no data loaded, stop here
-    if df_raw is None:
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
-
-    st.markdown("---")
-
-    # Continue with original data display
-    df_raw = load_data(dataset_info["raw_path"])  # Reload to ensure cached
-
-    if df_raw is None:
-        render_alert("Gagal memuat data", "danger")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
-
-    # Display metrics
-    st.markdown("#### 📊 Informasi Dataset")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        render_metric_card("Total Rows", format_number(len(df_raw)), "blue")
-
-    with col2:
-        render_metric_card("Columns", str(df_raw.shape[1]), "green")
-
-    with col3:
-        render_metric_card("File Size", f"{file_info['size_mb']} MB", "purple")
-
-    with col4:
-        render_metric_card("Missing Values", str(df_raw.isnull().sum().sum()), "yellow")
-
-    # Data preview
-    st.markdown("#### 🔍 Preview Data (10 baris pertama)")
-    st.dataframe(df_raw.head(10), use_container_width=True)
-
-    # Basic statistics
-    with st.expander("📈 Statistik Deskriptif"):
-        st.dataframe(df_raw.describe(), use_container_width=True)
-
-    # Column info
-    with st.expander("📋 Informasi Kolom"):
-        col_info = pd.DataFrame({
-            'Column': df_raw.columns,
-            'Type': df_raw.dtypes.values,
-            'Non-Null': df_raw.count().values,
-            'Null': df_raw.isnull().sum().values
-        })
-        st.dataframe(col_info, use_container_width=True)
-
-    # Navigation
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("▶ Lanjut ke Stage 02: Preprocessing", type="primary"):
-        st.session_state.current_stage = 2
-        if 1 not in st.session_state.completed_stages:
-            st.session_state.completed_stages.append(1)
-        st.rerun()
+        # Navigation
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("▶ Lanjut ke Stage 02: Preprocessing", type="primary"):
+            st.session_state.current_stage = 2
+            if 1 not in st.session_state.completed_stages:
+                st.session_state.completed_stages.append(1)
+            st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
 def render_stage_02():
-    """Stage 02: Preprocessing"""
+    """Stage 02: Preprocessing & Data Cleaning (with Merge Support)"""
     st.markdown('<div class="stage-card">', unsafe_allow_html=True)
     st.markdown("### 🧹 Stage 02: Preprocessing & Data Cleaning")
 
     dataset_key = st.session_state.selected_dataset
     dataset_info = DATASETS[dataset_key]
+    merge_mode = st.session_state.get('merge_mode', False)
 
-    # Load data
-    df_raw = load_data(dataset_info["raw_path"])
-    df_cleaned = load_data(dataset_info["cleaned_path"])
+    # MERGE MODE: Merge datasets first
+    if merge_mode:
+        st.markdown("#### 🔗 Merge Tracker + Staff Datasets")
+        render_alert("Mode Merge aktif: Dataset akan digabung sebelum preprocessing.", "info")
 
-    if df_raw is None:
-        render_alert("Data raw tidak ditemukan. Kembali ke Stage 01.", "warning")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
+        # Get both datasets from session state
+        df_tracker = st.session_state.get('df_tracker_loaded')
+        df_staff = st.session_state.get('df_staff_loaded')
 
-    if df_cleaned is None:
-        render_alert("Data cleaned belum tersedia. Jalankan script 02_preprocessing.py terlebih dahulu.", "warning")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
+        if df_tracker is None or df_staff is None:
+            render_alert("Dataset tidak ditemukan di session state. Kembali ke Stage 01 untuk load ulang.", "danger")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+        st.markdown("**📊 Before Merge:**")
+        col1, col2 = st.columns(2)
+        with col1:
+            render_metric_card("Tracker Rows", format_number(len(df_tracker)), "blue")
+        with col2:
+            render_metric_card("Staff Rows", format_number(len(df_staff)), "green")
+
+        # Call merge_datasets function
+        try:
+            with st.spinner("Merging datasets..."):
+                df_merged = merge_datasets(df_tracker, df_staff)
+
+            st.success(f"✅ Datasets merged successfully! Total rows: {len(df_merged)}")
+
+            # Show merged data info
+            st.markdown("**🔗 After Merge:**")
+            render_metric_card("Combined Rows", format_number(len(df_merged)), "purple")
+            render_metric_card("Common Columns", str(df_merged.shape[1] - 1), "yellow")  # -1 for dataset_source
+
+            # Show dataset source distribution
+            source_counts = df_merged['dataset_source'].value_counts()
+            st.markdown("**Distribution by Source:**")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Tracker", format_number(source_counts.get('tracker', 0)))
+            with col2:
+                st.metric("Staff", format_number(source_counts.get('staff', 0)))
+
+            # Preview merged data
+            st.markdown("#### 🔍 Preview Merged Data")
+            st.dataframe(df_merged.head(10), use_container_width=True)
+
+            # Now set df_raw to merged for preprocessing
+            df_raw = df_merged
+
+            render_alert("✅ Merge complete! Data siap untuk preprocessing. Jalankan script preprocessing untuk data merged.", "success")
+
+        except Exception as e:
+            render_alert(f"❌ Error during merge: {str(e)}", "danger")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+        # Load cleaned merged data (if available)
+        df_cleaned = load_data(dataset_info["cleaned_path"])
+
+        if df_cleaned is None:
+            render_alert("Data cleaned belum tersedia. Jalankan script 02_preprocessing.py untuk merged dataset terlebih dahulu.", "warning")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+    else:
+        # SEPARATE MODE: Original flow
+        # Load data
+        df_raw = load_data(dataset_info["raw_path"])
+        df_cleaned = load_data(dataset_info["cleaned_path"])
+
+        if df_raw is None:
+            render_alert("Data raw tidak ditemukan. Kembali ke Stage 01.", "warning")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+        if df_cleaned is None:
+            render_alert("Data cleaned belum tersedia. Jalankan script 02_preprocessing.py terlebih dahulu.", "warning")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
 
     # Show before/after comparison
     st.markdown("#### ⚖️ Perbandingan Before/After")
