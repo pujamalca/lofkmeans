@@ -933,8 +933,10 @@ def render_stage_04():
     # Verification
     st.markdown("#### ✅ Verification")
 
-    mean_val = df_normalized.mean().mean()
-    std_val = df_normalized.std().mean()
+    # Only calculate mean/std for numeric columns (exclude timestamp, user_id, name, etc.)
+    numeric_cols = df_normalized.select_dtypes(include=['float64', 'int64']).columns
+    mean_val = df_normalized[numeric_cols].mean().mean()
+    std_val = df_normalized[numeric_cols].std().mean()
 
     col1, col2 = st.columns(2)
 
