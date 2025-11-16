@@ -6,6 +6,27 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+import io
+import sqlite3
+
+# Database imports (optional, will handle import errors gracefully)
+try:
+    from sqlalchemy import create_engine, text
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    SQLALCHEMY_AVAILABLE = False
+
+try:
+    import mysql.connector
+    MYSQL_AVAILABLE = True
+except ImportError:
+    MYSQL_AVAILABLE = False
+
+try:
+    import psycopg2
+    POSTGRES_AVAILABLE = True
+except ImportError:
+    POSTGRES_AVAILABLE = False
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -456,6 +477,244 @@ def get_file_info(path: Path) -> Dict:
     }
 
 # ============================================================================
+# DATA UPLOAD & DATABASE FUNCTIONS
+# ============================================================================
+
+def connect_to_database(db_type: str, config: Dict) -> Optional[pd.DataFrame]:
+    """
+    Connect to database and execute query
+
+    Args:
+        db_type: 'mysql', 'postgresql', or 'sqlite'
+        config: Database connection configuration
+
+    Returns:
+        DataFrame with query results or None if error
+    """
+    try:
+        if db_type == 'sqlite':
+            # SQLite connection
+            conn = sqlite3.connect(config['database'])
+            df = pd.read_sql_query(config['query'], conn)
+            conn.close()
+            return df
+
+        elif db_type == 'mysql' and MYSQL_AVAILABLE:
+            # MySQL connection
+            conn = mysql.connector.connect(
+                host=config['host'],
+                port=config.get('port', 3306),
+                user=config['user'],
+                password=config['password'],
+                database=config['database']
+            )
+            df = pd.read_sql_query(config['query'], conn)
+            conn.close()
+            return df
+
+        elif db_type == 'postgresql' and POSTGRES_AVAILABLE and SQLALCHEMY_AVAILABLE:
+            # PostgreSQL connection via SQLAlchemy
+            connection_string = f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config.get('port', 5432)}/{config['database']}"
+            engine = create_engine(connection_string)
+            df = pd.read_sql_query(config['query'], engine)
+            engine.dispose()
+            return df
+
+        elif db_type == 'mysql' and SQLALCHEMY_AVAILABLE:
+            # MySQL via SQLAlchemy (fallback)
+            connection_string = f"mysql+pymysql://{config['user']}:{config['password']}@{config['host']}:{config.get('port', 3306)}/{config['database']}"
+            engine = create_engine(connection_string)
+            df = pd.read_sql_query(config['query'], engine)
+            engine.dispose()
+            return df
+
+        else:
+            st.error(f"Database type '{db_type}' not supported or required libraries not installed")
+            return None
+
+    except Exception as e:
+        st.error(f"Database connection error: {str(e)}")
+        return None
+
+def parse_sql_file(sql_content: str) -> str:
+    """
+    Parse SQL file and extract the main query
+
+    Args:
+        sql_content: Content of SQL file
+
+    Returns:
+        Cleaned SQL query
+    """
+    # Remove comments
+    lines = []
+    for line in sql_content.split('\n'):
+        # Remove single-line comments
+        if '--' in line:
+            line = line[:line.index('--')]
+        if '#' in line:
+            line = line[:line.index('#')]
+
+        # Remove multi-line comments
+        if '/*' in line and '*/' in line:
+            start = line.index('/*')
+            end = line.index('*/') + 2
+            line = line[:start] + line[end:]
+
+        if line.strip():
+            lines.append(line)
+
+    # Join and clean
+    query = ' '.join(lines)
+    query = ' '.join(query.split())  # Normalize whitespace
+
+    return query
+
+def upload_csv_data(uploaded_file, dataset_name: str) -> Optional[pd.DataFrame]:
+    """
+    Upload and process CSV file
+
+    Args:
+        uploaded_file: Streamlit uploaded file object
+        dataset_name: 'tracker' or 'staff'
+
+    Returns:
+        DataFrame or None if error
+    """
+    try:
+        # Try different separators
+        content = uploaded_file.getvalue().decode('utf-8')
+
+        # Detect separator
+        first_line = content.split('\n')[0]
+        if '\t' in first_line:
+            sep = '\t'
+        elif ';' in first_line:
+            sep = ';'
+        else:
+            sep = ','
+
+        # Read CSV
+        df = pd.read_csv(io.StringIO(content), sep=sep)
+
+        # Save to raw folder
+        output_path = Path(f"data/raw/{dataset_name}_raw.csv")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(output_path, index=False)
+
+        st.success(f"✅ CSV uploaded successfully! Saved to {output_path}")
+        return df
+
+    except Exception as e:
+        st.error(f"Error uploading CSV: {str(e)}")
+        return None
+
+def upload_sql_file(uploaded_file, dataset_name: str, db_config: Dict) -> Optional[pd.DataFrame]:
+    """
+    Upload SQL file and execute query
+
+    Args:
+        uploaded_file: Streamlit uploaded file object
+        dataset_name: 'tracker' or 'staff'
+        db_config: Database configuration
+
+    Returns:
+        DataFrame or None if error
+    """
+    try:
+        # Read SQL file
+        sql_content = uploaded_file.getvalue().decode('utf-8')
+        query = parse_sql_file(sql_content)
+
+        # Execute query
+        db_config['query'] = query
+        df = connect_to_database(db_config['type'], db_config)
+
+        if df is not None:
+            # Save to raw folder
+            output_path = Path(f"data/raw/{dataset_name}_raw.csv")
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(output_path, index=False)
+
+            st.success(f"✅ SQL executed successfully! Saved to {output_path}")
+            return df
+
+        return None
+
+    except Exception as e:
+        st.error(f"Error executing SQL file: {str(e)}")
+        return None
+
+def validate_uploaded_data(df: pd.DataFrame, dataset_type: str) -> Dict:
+    """
+    Validate uploaded data structure
+
+    Args:
+        df: DataFrame to validate
+        dataset_type: 'tracker' or 'staff'
+
+    Returns:
+        Dictionary with validation results
+    """
+    results = {
+        'valid': True,
+        'errors': [],
+        'warnings': [],
+        'info': {}
+    }
+
+    # Basic checks
+    results['info']['rows'] = len(df)
+    results['info']['columns'] = len(df.columns)
+    results['info']['column_names'] = df.columns.tolist()
+
+    if dataset_type == 'tracker':
+        # Expected columns for tracker
+        required_cols = ['timestamp', 'user_id']  # Minimal requirements
+        recommended_cols = ['query_info', 'query_type', 'ip_address']
+
+        # Check required columns
+        missing_required = [col for col in required_cols if col not in df.columns]
+        if missing_required:
+            results['valid'] = False
+            results['errors'].append(f"Missing required columns: {', '.join(missing_required)}")
+
+        # Check recommended columns
+        missing_recommended = [col for col in recommended_cols if col not in df.columns]
+        if missing_recommended:
+            results['warnings'].append(f"Missing recommended columns: {', '.join(missing_recommended)}")
+
+    elif dataset_type == 'staff':
+        # Expected columns for staff
+        required_cols = ['user_id', 'timestamp']  # Minimal requirements
+        recommended_cols = ['name', 'date']
+
+        # Check required columns
+        missing_required = [col for col in required_cols if col not in df.columns]
+        if missing_required:
+            results['valid'] = False
+            results['errors'].append(f"Missing required columns: {', '.join(missing_required)}")
+
+        # Check recommended columns
+        missing_recommended = [col for col in recommended_cols if col not in df.columns]
+        if missing_recommended:
+            results['warnings'].append(f"Missing recommended columns: {', '.join(missing_recommended)}")
+
+    # Check for empty data
+    if len(df) == 0:
+        results['valid'] = False
+        results['errors'].append("Dataset is empty (0 rows)")
+
+    # Check for missing values
+    missing_pct = (df.isnull().sum().sum() / (len(df) * len(df.columns))) * 100
+    if missing_pct > 50:
+        results['warnings'].append(f"High percentage of missing values: {missing_pct:.1f}%")
+
+    results['info']['missing_percentage'] = round(missing_pct, 2)
+
+    return results
+
+# ============================================================================
 # SESSION STATE INITIALIZATION
 # ============================================================================
 
@@ -660,16 +919,204 @@ def render_stage_01():
         dataset_info = DATASETS[dataset_key]
         st.markdown(f"**Deskripsi:** {dataset_info['description']}")
 
-    # Load raw data
-    raw_path = dataset_info["raw_path"]
-    file_info = get_file_info(raw_path)
+    st.markdown("---")
 
-    if not file_info["exists"]:
-        render_alert(f"File {raw_path} tidak ditemukan. Pastikan data sudah ada di folder data/raw/", "warning")
+    # Data source selection
+    st.markdown("#### 📊 Data Source")
+
+    data_source = st.radio(
+        "Pilih sumber data:",
+        options=["Load from file", "Upload CSV", "Upload SQL", "Connect to Database"],
+        horizontal=True,
+        key=f"data_source_{dataset_key}"
+    )
+
+    df_raw = None
+
+    # Handle different data sources
+    if data_source == "Load from file":
+        # Original: Load from existing file
+        raw_path = dataset_info["raw_path"]
+        file_info = get_file_info(raw_path)
+
+        if not file_info["exists"]:
+            render_alert(f"File {raw_path} tidak ditemukan. Silakan upload data atau gunakan sumber lain.", "warning")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+        df_raw = load_data(raw_path)
+
+        if df_raw is not None:
+            st.success(f"✅ Loaded from {raw_path}")
+
+    elif data_source == "Upload CSV":
+        # Upload CSV file
+        st.markdown("**Upload CSV File**")
+        uploaded_file = st.file_uploader(
+            "Choose a CSV file (comma, semicolon, or tab separated)",
+            type=['csv', 'txt'],
+            key=f"csv_upload_{dataset_key}"
+        )
+
+        if uploaded_file is not None:
+            with st.spinner("Uploading and processing CSV..."):
+                df_raw = upload_csv_data(uploaded_file, dataset_key)
+
+            if df_raw is not None:
+                # Validate data
+                validation = validate_uploaded_data(df_raw, dataset_key)
+
+                if validation['errors']:
+                    for error in validation['errors']:
+                        render_alert(f"❌ {error}", "danger")
+
+                if validation['warnings']:
+                    for warning in validation['warnings']:
+                        render_alert(f"⚠️ {warning}", "warning")
+
+                if validation['valid']:
+                    render_alert("✅ Data validation passed!", "success")
+
+    elif data_source == "Upload SQL":
+        # Upload SQL file
+        st.markdown("**Upload SQL File & Connect to Database**")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            uploaded_sql = st.file_uploader(
+                "Choose a SQL file (.sql)",
+                type=['sql'],
+                key=f"sql_upload_{dataset_key}"
+            )
+
+        with col2:
+            # Database configuration
+            db_type = st.selectbox(
+                "Database Type",
+                options=['mysql', 'postgresql', 'sqlite'],
+                key=f"db_type_{dataset_key}"
+            )
+
+            if db_type != 'sqlite':
+                db_host = st.text_input("Host", value="localhost", key=f"db_host_{dataset_key}")
+                db_port = st.number_input("Port", value=3306 if db_type == 'mysql' else 5432, key=f"db_port_{dataset_key}")
+                db_user = st.text_input("Username", key=f"db_user_{dataset_key}")
+                db_password = st.text_input("Password", type="password", key=f"db_password_{dataset_key}")
+                db_name = st.text_input("Database Name", key=f"db_name_{dataset_key}")
+            else:
+                db_name = st.text_input("SQLite Database Path", value="database.db", key=f"db_name_{dataset_key}")
+
+        if uploaded_sql is not None and st.button("Execute SQL", key=f"exec_sql_{dataset_key}"):
+            db_config = {
+                'type': db_type,
+                'database': db_name
+            }
+
+            if db_type != 'sqlite':
+                db_config.update({
+                    'host': db_host,
+                    'port': db_port,
+                    'user': db_user,
+                    'password': db_password
+                })
+
+            with st.spinner("Executing SQL query..."):
+                df_raw = upload_sql_file(uploaded_sql, dataset_key, db_config)
+
+            if df_raw is not None:
+                # Validate data
+                validation = validate_uploaded_data(df_raw, dataset_key)
+
+                if validation['errors']:
+                    for error in validation['errors']:
+                        render_alert(f"❌ {error}", "danger")
+
+                if validation['warnings']:
+                    for warning in validation['warnings']:
+                        render_alert(f"⚠️ {warning}", "warning")
+
+                if validation['valid']:
+                    render_alert("✅ Data validation passed!", "success")
+
+    elif data_source == "Connect to Database":
+        # Direct database connection
+        st.markdown("**Direct Database Connection**")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            db_type = st.selectbox(
+                "Database Type",
+                options=['mysql', 'postgresql', 'sqlite'],
+                key=f"db_direct_type_{dataset_key}"
+            )
+
+            if db_type != 'sqlite':
+                db_host = st.text_input("Host", value="localhost", key=f"db_direct_host_{dataset_key}")
+                db_port = st.number_input("Port", value=3306 if db_type == 'mysql' else 5432, key=f"db_direct_port_{dataset_key}")
+                db_user = st.text_input("Username", key=f"db_direct_user_{dataset_key}")
+                db_password = st.text_input("Password", type="password", key=f"db_direct_password_{dataset_key}")
+                db_name = st.text_input("Database Name", key=f"db_direct_name_{dataset_key}")
+            else:
+                db_name = st.text_input("SQLite Database Path", value="database.db", key=f"db_direct_name_{dataset_key}")
+
+        with col2:
+            query = st.text_area(
+                "SQL Query",
+                value="SELECT * FROM table_name LIMIT 1000",
+                height=200,
+                key=f"db_query_{dataset_key}"
+            )
+
+        if st.button("Connect & Query", key=f"connect_db_{dataset_key}"):
+            db_config = {
+                'type': db_type,
+                'database': db_name,
+                'query': query
+            }
+
+            if db_type != 'sqlite':
+                db_config.update({
+                    'host': db_host,
+                    'port': db_port,
+                    'user': db_user,
+                    'password': db_password
+                })
+
+            with st.spinner("Connecting to database..."):
+                df_raw = connect_to_database(db_type, db_config)
+
+            if df_raw is not None:
+                # Save to file
+                output_path = Path(f"data/raw/{dataset_key}_raw.csv")
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                df_raw.to_csv(output_path, index=False)
+                st.success(f"✅ Data retrieved successfully! Saved to {output_path}")
+
+                # Validate data
+                validation = validate_uploaded_data(df_raw, dataset_key)
+
+                if validation['errors']:
+                    for error in validation['errors']:
+                        render_alert(f"❌ {error}", "danger")
+
+                if validation['warnings']:
+                    for warning in validation['warnings']:
+                        render_alert(f"⚠️ {warning}", "warning")
+
+                if validation['valid']:
+                    render_alert("✅ Data validation passed!", "success")
+
+    # If no data loaded, stop here
+    if df_raw is None:
         st.markdown('</div>', unsafe_allow_html=True)
         return
 
-    df_raw = load_data(raw_path)
+    st.markdown("---")
+
+    # Continue with original data display
+    df_raw = load_data(dataset_info["raw_path"])  # Reload to ensure cached
 
     if df_raw is None:
         render_alert("Gagal memuat data", "danger")
