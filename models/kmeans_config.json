@@ -1,0 +1,28 @@
+{
+  "optimal_k": 2,
+  "silhouette_score": 0.9501242786557852,
+  "davies_bouldin_index": 0.029830559218014512,
+  "inertia": 1.6127070655443438e+21,
+  "n_features": 18,
+  "feature_names": [
+    "hour_actual",
+    "day_of_week_actual",
+    "day_of_month_actual",
+    "month_actual",
+    "is_outside_work_hours",
+    "is_weekend_flag",
+    "night_shift_flag",
+    "op_DELETE",
+    "op_INSERT",
+    "op_UPDATE",
+    "ip_last_octet",
+    "ip_hits_per_hour",
+    "user_avg_daily_activity",
+    "user_query_diversity",
+    "modification_ratio",
+    "delete_operation_count",
+    "query_length_normalized",
+    "lof_score"
+  ],
+  "model_type": "KMeans"
+}

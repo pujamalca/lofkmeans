@@ -1,0 +1,77 @@
+{
+  "optimal_k": 15,
+  "contamination": 0.05,
+  "n_features": 17,
+  "feature_names": [
+    "hour",
+    "day_of_week",
+    "day_of_month",
+    "month",
+    "is_outside_work_hours",
+    "is_weekend",
+    "is_night_shift",
+    "ip_last_octet",
+    "ip_count_per_hour",
+    "user_avg_daily_activity",
+    "user_query_diversity",
+    "modification_ratio",
+    "delete_operation_count",
+    "query_length_normalized",
+    "query_DELETE",
+    "query_INSERT",
+    "query_UPDATE"
+  ],
+  "model_type": "LocalOutlierFactor",
+  "grid_search_results": [
+    {
+      "k": 5,
+      "anomalies_detected": 227,
+      "anomaly_percentage": 4.846285226302306,
+      "lof_score_min": -11522866852.999395,
+      "lof_score_max": -0.8285714285960599,
+      "lof_score_mean": -84179880.2736059
+    },
+    {
+      "k": 10,
+      "anomalies_detected": 230,
+      "anomaly_percentage": 4.910333048676345,
+      "lof_score_min": -13446508712.904312,
+      "lof_score_max": -0.9049757898494226,
+      "lof_score_mean": -67799354.1050808
+    },
+    {
+      "k": 15,
+      "anomalies_detected": 234,
+      "anomaly_percentage": 4.995730145175064,
+      "lof_score_min": -13332187249.507917,
+      "lof_score_max": -0.8831979039485868,
+      "lof_score_mean": -79140760.74517922
+    },
+    {
+      "k": 20,
+      "anomalies_detected": 234,
+      "anomaly_percentage": 4.995730145175064,
+      "lof_score_min": -16226181276.614376,
+      "lof_score_max": -0.9108585860176447,
+      "lof_score_mean": -73122548.89311475
+    },
+    {
+      "k": 25,
+      "anomalies_detected": 223,
+      "anomaly_percentage": 4.760888129803586,
+      "lof_score_min": -11689600049.28777,
+      "lof_score_max": -0.9176138867217513,
+      "lof_score_mean": -31402399.134356376
+    },
+    {
+      "k": 30,
+      "anomalies_detected": 224,
+      "anomaly_percentage": 4.782237403928266,
+      "lof_score_min": -4348130116.49775,
+      "lof_score_max": -0.9311570853913254,
+      "lof_score_mean": -21291693.3653058
+    }
+  ],
+  "final_anomalies_count": 234,
+  "final_anomaly_percentage": 4.995730145175064
+}

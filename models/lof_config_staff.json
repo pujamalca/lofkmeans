@@ -1,0 +1,71 @@
+{
+  "optimal_k": 5,
+  "contamination": 0.05,
+  "n_features": 11,
+  "feature_names": [
+    "hour",
+    "day_of_week",
+    "month",
+    "day_of_month",
+    "IsEarlyLogin",
+    "IsLateLogin",
+    "IsAfterWorkHours",
+    "IsWeekend",
+    "frekuensi_login_per_user",
+    "pola_waktu_login",
+    "rasio_login_weekend"
+  ],
+  "model_type": "LocalOutlierFactor",
+  "grid_search_results": [
+    {
+      "k": 5,
+      "anomalies_detected": 41,
+      "anomaly_percentage": 5.061728395061729,
+      "lof_score_min": -9305996938.576138,
+      "lof_score_max": -0.6785714286310188,
+      "lof_score_mean": -105893455.48815997
+    },
+    {
+      "k": 10,
+      "anomalies_detected": 41,
+      "anomaly_percentage": 5.061728395061729,
+      "lof_score_min": -6180103712.296587,
+      "lof_score_max": -0.9036076284990239,
+      "lof_score_mean": -61880061.43448405
+    },
+    {
+      "k": 15,
+      "anomalies_detected": 41,
+      "anomaly_percentage": 5.061728395061729,
+      "lof_score_min": -3.488304439646497,
+      "lof_score_max": -0.8928617759712281,
+      "lof_score_mean": -1.0826272751525892
+    },
+    {
+      "k": 20,
+      "anomalies_detected": 41,
+      "anomaly_percentage": 5.061728395061729,
+      "lof_score_min": -3.6889037555586635,
+      "lof_score_max": -0.9324698490643119,
+      "lof_score_mean": -1.077148913947772
+    },
+    {
+      "k": 25,
+      "anomalies_detected": 40,
+      "anomaly_percentage": 4.938271604938271,
+      "lof_score_min": -3.5927788077198874,
+      "lof_score_max": -0.9425636674396989,
+      "lof_score_mean": -1.0788117973677014
+    },
+    {
+      "k": 30,
+      "anomalies_detected": 41,
+      "anomaly_percentage": 5.061728395061729,
+      "lof_score_min": -3.5507829457780176,
+      "lof_score_max": -0.9569712083831483,
+      "lof_score_mean": -1.0842074155854173
+    }
+  ],
+  "final_anomalies_count": 41,
+  "final_anomaly_percentage": 5.061728395061729
+}

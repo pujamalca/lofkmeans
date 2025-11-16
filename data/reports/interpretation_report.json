@@ -1,0 +1,166 @@
+{
+  "generated_at": "2025-11-14T09:01:08.443949",
+  "datasets": {
+    "tracker": {
+      "total_anomalies": 235,
+      "clusters": [
+        {
+          "cluster_id": 0,
+          "count": 234,
+          "percentage": 99.6,
+          "peak_hour": 17,
+          "dominant_value": "INSERT",
+          "metric_means": {
+            "lof_score": 3048613563.8769603,
+            "modification_ratio": 0.0
+          },
+          "top_users": {
+            "8.0": 41,
+            "9.0": 41,
+            "10.0": 39
+          }
+        },
+        {
+          "cluster_id": 1,
+          "count": 1,
+          "percentage": 0.4,
+          "peak_hour": 16,
+          "dominant_value": "INSERT",
+          "metric_means": {
+            "lof_score": 56821382831.66095,
+            "modification_ratio": 0.0
+          },
+          "top_users": {
+            "13.0": 1
+          }
+        }
+      ]
+    },
+    "staff": {
+      "total_anomalies": 41,
+      "clusters": [
+        {
+          "cluster_id": 0,
+          "count": 10,
+          "percentage": 24.4,
+          "peak_hour": 12,
+          "dominant_value": "dr. Hj. Des Yetty Syahril, Sp.PD",
+          "metric_means": {
+            "IsAfterWorkHours": 0.0,
+            "frekuensi_login_per_user": -0.5603548401399582
+          },
+          "top_users": {
+            "2": 4,
+            "4": 4,
+            "1": 2
+          }
+        },
+        {
+          "cluster_id": 1,
+          "count": 1,
+          "percentage": 2.4,
+          "peak_hour": 17,
+          "dominant_value": "dr. Rita Danianti, Sp.JP",
+          "metric_means": {
+            "IsAfterWorkHours": 0.0,
+            "frekuensi_login_per_user": 1.1309536120076271
+          },
+          "top_users": {
+            "1": 1
+          }
+        },
+        {
+          "cluster_id": 2,
+          "count": 8,
+          "percentage": 19.5,
+          "peak_hour": 16,
+          "dominant_value": "dr. Rita Danianti, Sp.JP",
+          "metric_means": {
+            "IsAfterWorkHours": 0.0,
+            "frekuensi_login_per_user": 0.6858724403898416
+          },
+          "top_users": {
+            "1": 4,
+            "9": 3,
+            "4": 1
+          }
+        },
+        {
+          "cluster_id": 3,
+          "count": 6,
+          "percentage": 14.6,
+          "peak_hour": 10,
+          "dominant_value": "Renny Aisyah, Amd.Farm",
+          "metric_means": {
+            "IsAfterWorkHours": 0.0,
+            "frekuensi_login_per_user": -1.1156465875869097
+          },
+          "top_users": {
+            "7": 2,
+            "4": 1,
+            "8": 1
+          }
+        },
+        {
+          "cluster_id": 4,
+          "count": 1,
+          "percentage": 2.4,
+          "peak_hour": 10,
+          "dominant_value": "dr. Ivo Mahalia",
+          "metric_means": {
+            "IsAfterWorkHours": 0.0,
+            "frekuensi_login_per_user": -1.2852013196317804
+          },
+          "top_users": {
+            "4": 1
+          }
+        },
+        {
+          "cluster_id": 5,
+          "count": 4,
+          "percentage": 9.8,
+          "peak_hour": 17,
+          "dominant_value": "Dessy Rahmadhany, Amd.Kep",
+          "metric_means": {
+            "IsAfterWorkHours": 0.0,
+            "frekuensi_login_per_user": 0.19310400038443615
+          },
+          "top_users": {
+            "9": 2,
+            "1": 1,
+            "14": 1
+          }
+        },
+        {
+          "cluster_id": 6,
+          "count": 6,
+          "percentage": 14.6,
+          "peak_hour": 11,
+          "dominant_value": "Dessy Rahmadhany, Amd.Kep",
+          "metric_means": {
+            "IsAfterWorkHours": 0.0,
+            "frekuensi_login_per_user": 0.9402045384571477
+          },
+          "top_users": {
+            "1": 3,
+            "9": 3
+          }
+        },
+        {
+          "cluster_id": 7,
+          "count": 5,
+          "percentage": 12.2,
+          "peak_hour": 11,
+          "dominant_value": "dr. Hj. Des Yetty Syahril, Sp.PD",
+          "metric_means": {
+            "IsAfterWorkHours": 0.0,
+            "frekuensi_login_per_user": -0.6811625867219285
+          },
+          "top_users": {
+            "2": 5
+          }
+        }
+      ]
+    }
+  }
+}

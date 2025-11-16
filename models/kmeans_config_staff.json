@@ -1,0 +1,27 @@
+{
+  "optimal_k": 8,
+  "silhouette_score": 0.8791067514051575,
+  "davies_bouldin_index": 0.15321831294573804,
+  "inertia": 4.1048971666493894e+17,
+  "feature_names": [
+    "hour_actual",
+    "day_of_week_actual",
+    "day_of_month_actual",
+    "month_actual",
+    "is_outside_work_hours",
+    "is_weekend_flag",
+    "night_shift_flag",
+    "IsEarlyLogin",
+    "IsLateLogin",
+    "IsAfterWorkHours",
+    "IsWeekend",
+    "frekuensi_login_per_user",
+    "pola_waktu_login",
+    "rasio_login_weekend",
+    "user_avg_daily_activity",
+    "login_day_diversity",
+    "lof_score",
+    "ip_hits_per_hour"
+  ],
+  "model_type": "KMeans"
+}

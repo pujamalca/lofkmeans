@@ -1,0 +1,74 @@
+{
+  "optimal_k": 5,
+  "contamination": 0.05,
+  "n_features": 14,
+  "feature_names": [
+    "hour",
+    "day_of_week",
+    "month",
+    "day_of_month",
+    "IsOutsideWorkHours",
+    "IsWeekend",
+    "NightShift",
+    "op_DELETE",
+    "op_INSERT",
+    "op_UPDATE",
+    "frekuensi_aktivitas_per_user",
+    "jumlah_tipe_operasi_unik",
+    "rasio_operasi_modifikasi",
+    "pola_waktu_akses"
+  ],
+  "model_type": "LocalOutlierFactor",
+  "grid_search_results": [
+    {
+      "k": 5,
+      "anomalies_detected": 235,
+      "anomaly_percentage": 5.017079419299743,
+      "lof_score_min": -56821382831.66095,
+      "lof_score_max": -0.9285445044403347,
+      "lof_score_mean": -164431460.55739182
+    },
+    {
+      "k": 10,
+      "anomalies_detected": 227,
+      "anomaly_percentage": 4.846285226302306,
+      "lof_score_min": -19510061980.109863,
+      "lof_score_max": -0.9453718956853278,
+      "lof_score_mean": -184877542.1518377
+    },
+    {
+      "k": 15,
+      "anomalies_detected": 231,
+      "anomaly_percentage": 4.9316823228010245,
+      "lof_score_min": -21193862183.860157,
+      "lof_score_max": -0.8888888889075134,
+      "lof_score_mean": -247531916.13397828
+    },
+    {
+      "k": 20,
+      "anomalies_detected": 210,
+      "anomaly_percentage": 4.48334756618275,
+      "lof_score_min": -21993962978.89092,
+      "lof_score_max": -0.8913793103598955,
+      "lof_score_mean": -271691732.4871857
+    },
+    {
+      "k": 25,
+      "anomalies_detected": 221,
+      "anomaly_percentage": 4.718189581554228,
+      "lof_score_min": -22473488424.781693,
+      "lof_score_max": -0.9289032258128787,
+      "lof_score_mean": -336381470.6285645
+    },
+    {
+      "k": 30,
+      "anomalies_detected": 222,
+      "anomaly_percentage": 4.739538855678907,
+      "lof_score_min": -22883016994.654514,
+      "lof_score_max": -0.9566260035456102,
+      "lof_score_mean": -311148224.1277532
+    }
+  ],
+  "final_anomalies_count": 235,
+  "final_anomaly_percentage": 5.017079419299743
+}
