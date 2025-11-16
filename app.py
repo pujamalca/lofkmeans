@@ -714,6 +714,50 @@ def validate_uploaded_data(df: pd.DataFrame, dataset_type: str) -> Dict:
 
     return results
 
+def merge_datasets(df_tracker: pd.DataFrame, df_staff: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge tracker and staff datasets into one unified dataset
+
+    Args:
+        df_tracker: Tracker DataFrame
+        df_staff: Staff DataFrame
+
+    Returns:
+        Merged DataFrame with dataset_source column
+    """
+    # Add source identifier
+    df_tracker_copy = df_tracker.copy()
+    df_staff_copy = df_staff.copy()
+
+    df_tracker_copy['dataset_source'] = 'tracker'
+    df_staff_copy['dataset_source'] = 'staff'
+
+    # Normalize column names to common schema
+    # Find common columns
+    tracker_cols = set(df_tracker_copy.columns)
+    staff_cols = set(df_staff_copy.columns)
+    common_cols = tracker_cols.intersection(staff_cols)
+
+    # Merge on common columns only
+    if 'timestamp' in common_cols and 'user_id' in common_cols:
+        # Keep only common columns plus dataset_source
+        keep_cols = list(common_cols) + ['dataset_source']
+
+        df_tracker_filtered = df_tracker_copy[keep_cols]
+        df_staff_filtered = df_staff_copy[keep_cols]
+
+        # Concatenate
+        df_merged = pd.concat([df_tracker_filtered, df_staff_filtered], ignore_index=True)
+
+        # Save to merged file
+        output_path = Path("data/raw/merged_raw.csv")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        df_merged.to_csv(output_path, index=False)
+
+        return df_merged
+    else:
+        raise ValueError("Both datasets must have 'timestamp' and 'user_id' columns for merging")
+
 # ============================================================================
 # SESSION STATE INITIALIZATION
 # ============================================================================
@@ -899,25 +943,13 @@ def create_comparison_metrics(dataset1_name: str, dataset2_name: str) -> pd.Data
 # ============================================================================
 
 def render_stage_01():
-    """Stage 01: Load & Explore"""
+    """Stage 01: Load & Explore Both Datasets (Tracker + Staff)"""
     st.markdown('<div class="stage-card">', unsafe_allow_html=True)
-    st.markdown("### 📁 Stage 01: Load & Explore Data")
+    st.markdown("### 📁 Stage 01: Load & Explore Data (Tracker + Staff)")
 
-    # Dataset selection
-    col1, col2 = st.columns([2, 3])
+    render_alert("Di stage ini, load KEDUA dataset (Tracker DAN Staff). Keduanya akan digabung di Stage 02.", "info")
 
-    with col1:
-        dataset_key = st.selectbox(
-            "Pilih Dataset",
-            options=list(DATASETS.keys()),
-            format_func=lambda x: DATASETS[x]["label"],
-            key="dataset_selector"
-        )
-        st.session_state.selected_dataset = dataset_key
-
-    with col2:
-        dataset_info = DATASETS[dataset_key]
-        st.markdown(f"**Deskripsi:** {dataset_info['description']}")
+    st.markdown("---")
 
     st.markdown("---")
 
