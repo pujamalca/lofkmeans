@@ -22,6 +22,13 @@
 - ✅ **Dataset Comparison** - Side-by-side Tracker vs Staff comparison
 - ✅ **Quick Stats Dashboard** - Real-time metrics in sidebar
 
+### 📤 Data Upload Features (NEWEST!)
+- ✅ **CSV Upload** - Upload file CSV dengan auto-detection separator
+- ✅ **SQL File Upload** - Upload & execute SQL file ke database
+- ✅ **Database Connection** - Connect langsung ke MySQL/PostgreSQL/SQLite
+- ✅ **Data Validation** - Automatic validation setelah upload
+- ✅ **Multi-format Support** - Comma, semicolon, tab-separated CSV
+
 ### 🚀 Wizard-Style Navigation
 - **7 Stages Pipeline** dengan flow yang jelas:
   1. **Load & Explore** - Memuat dan eksplorasi data
